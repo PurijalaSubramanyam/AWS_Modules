@@ -16,3 +16,8 @@ variable "policy_arn" {}
 variable "trail_name" {}
 variable "s3_bucket_name" {}
 variable "route_table_name" {}
+variable "load_balancer_type" {}
+variable "listener_protocol" {}
+variable "listener_port" {}
+variable "target_protocol" {}
+variable "target_port" {}

@@ -1,7 +1,7 @@
 resource "aws_lb" "this" {
   name               = "${var.name}-alb"
   internal           = false
-  load_balancer_type = "application"
+  load_balancer_type = var.load_balancer_type
   security_groups    = var.security_groups
   subnets            = var.subnet_ids
 

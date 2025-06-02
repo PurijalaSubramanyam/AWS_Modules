@@ -7,6 +7,13 @@ module "aws_vpc" {
   environment = var.environment
 }
 
+module "aws_route_table" {
+  source           = "./modules/aws_route_table"
+  vpc_id           = module.aws_vpc.vpc_id
+  gateway_id       = module.aws_vpc.internet_gateway_id
+  route_table_name = var.route_table_name
+}
+
 module "aws_subnet" {
   source         = "./modules/aws_subnet"
   vpc_id         = module.aws_vpc.vpc_id
@@ -14,7 +21,7 @@ module "aws_subnet" {
   vpc_name       = var.vpc_name
   environment    = var.environment
   subnet_count   = var.subnet_count
-  route_table_id = module.aws_vpc.route_table_id
+  route_table_id = module.aws_route_table.route_table_id
 }
 
 module "aws_security_group" {
@@ -47,12 +54,17 @@ module "aws_nat_gateway" {
 }
 
 module "alb" {
-  source          = "./modules/aws_lb"
-  name            = "myapp"
-  environment     = var.environment
-  vpc_id          = module.aws_vpc.vpc_id
-  subnet_ids      = module.aws_subnet.subnet_ids
-  security_groups = [module.aws_security_group.security_group_id]
+  source              = "./modules/aws_lb"
+  name                = "myapp"
+  load_balancer_type  = var.load_balancer_type
+  listener_protocol   = var.listener_protocol
+  listener_port       = var.listener_port
+  target_protocol     = var.target_protocol
+  target_port         = var.target_port
+  environment         = var.environment
+  vpc_id              = module.aws_vpc.vpc_id
+  subnet_ids          = module.aws_subnet.subnet_ids
+  security_groups     = [module.aws_security_group.security_group_id]
 }
 
 module "aws_s3" {
@@ -88,9 +100,55 @@ module "aws_cloudtrail" {
   account_id     = data.aws_caller_identity.current.account_id
 }
 
-module "aws_route_table" {
-  source           = "./modules/aws_route_table"
-  vpc_id           = module.aws_vpc.vpc_id
-  gateway_id       = module.aws_vpc.internet_gateway_id
-  route_table_name = var.route_table_name
+module "autoscaling" {
+  source           = "./modules/aws_autoscaling_group"
+  name_prefix      = "myapp"
+  ami_id           = var.ami_id
+  instance_type    = var.instance_type
+  desired_capacity = 2
+  max_size         = 3
+  min_size         = 1
+  subnet_ids       = module.aws_subnet.subnet_ids
+}
+
+module "elasticache" {
+  source             = "./modules/aws_elasticache"
+  name_prefix        = "myapp"
+  node_type          = "cache.t3.micro"
+  num_nodes          = 1
+  subnet_ids         = module.aws_subnet.subnet_ids
+  security_group_ids = [module.aws_security_group.security_group_id]
+}
+
+module "cpu_alarm" {
+  source      = "./modules/aws_cloudwatch_metric_alarm"
+  alarm_name  = "high-cpu-alarm"
+  metric_name = "CPUUtilization"
+  namespace   = "AWS/EC2"
+  threshold   = 70
+  dimensions = {
+    InstanceId = module.aws_ec2.instance_id
+  }
+}
+
+data "aws_availability_zones" "available" {}
+
+module "ebs_volume" {
+  source            = "./modules/aws_ebs_volume"
+  availability_zone = data.aws_availability_zones.available.names[0]
+  size              = 8
+  volume_type       = "gp2"
+  name              = "ebs-volume-free"
+}
+
+module "kms" {
+  source      = "./modules/aws_kms_key"
+  description = "Subbu Test KMS Key"
+}
+
+module "eks_cluster" {
+  source           = "./modules/aws_eks"
+  cluster_name     = "subbu-eks"
+  cluster_role_arn = module.aws_iam_role.role_arn
+  subnet_ids       = module.aws_subnet.subnet_ids
 }

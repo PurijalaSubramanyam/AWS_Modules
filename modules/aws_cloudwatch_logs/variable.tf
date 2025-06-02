@@ -6,7 +6,6 @@ variable "log_group_name" {
 variable "retention_days" {
   description = "Retention days for log group"
   type        = number
-  default     = 7
 }
 
 variable "environment" {
